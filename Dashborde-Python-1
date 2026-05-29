@@ -1,0 +1,214 @@
+import pandas as pd
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, NamedStyle
+from openpyxl.utils import get_column_letter
+from openpyxl.chart import BarChart, Reference
+
+# 1) BASE DE DADOS SANITIZADA (ESTRUTURA PURA SEM ARQUIVOS EXTERNOS)
+columns = [
+    "sale_id", "SaleDate", "SaleDateSanitized", "customer_name", "porsche_model", "PorscheModelSanitized",
+    "model_year", "ModelYearSanitized", "sales_price", "SalesPriceSanitized", "vehicle_mileage",
+    "VehicleMileageSanitized", "payment_method", "PayMethodSanitized", "city", "CitySanitized",
+    "state", "StateSanitized", "salesperson", "delivery_status", "DeliveryStatusSanitized"
+]
+
+raw_data = [
+    [1, "2024-02-30", "2024-03-01", "Michael Adams", "911 Turbo", "911 Turbo", 2022, 2022, "$79,500.00", 79500.00, "9,800 miles", 9800, "credit card", "Credit Card", "boston", "Boston", "ma", "MA", "Amanda Scott", "delivered", "Delivered"],
+    [2, "03/14/2024", "2024-03-14", "Sophia Miller", "911 Turbo S", "911 Turbo S", 2024, 2024, "235000 USD", 235000.00, "1,200 mi", 1200, "Wire", "Bank Transfer", "seattle", "Seattle", "Washington", "WA", "Kevin Green", "delivered!!!", "Delivered"],
+    [3, "2024-04-18", "2024-04-18", "Daniel Jones", "Cayenne Coupe", "Cayenne Coupe", 2023, 2023, "USD 112,750", 112750.00, "miles: 6,400", 6400, "Financing", "Financing", "austin", "Austin", "tx", "TX", "Brian Hall", "In transit", "In Transit"],
+    [4, "###########", "2024-04-22", "Olivia Brown", "Macan", "Macan", 2021, 2021, "68,900.00", 68900.00, "28000", 28000, "cash", "Cash", "denver", "Denver", "colorado", "CO", "Rachel Turner", "CANCELLED", "Cancelled"],
+    [5, "2024-05-02", "2024-05-02", "William Smith", "Taycan 4S", "Taycan 4S", 2024, 2024, "$103,200", 103200.00, "0", 0, "bank-transfer", "Bank Transfer", "los angeles", "Los Angeles", "ca", "CA", "Thomas King", "delivered!!!", "Delivered"],
+    [12, "2024.07.11", "2024-07-11", "Noah Davis", "Cayenne", "Cayenne", "2020-2021", 2020, "USD 96,300", 96300.00, "41,000 mi", 41000, "lease", "Lease", "new york", "New York", "New York", "NY", "Mark Evans", "pending approval", "Pending Approval"],
+    [14, "08/19/24", "2024-08-19", "Liam Rodriguez", "718 Boxster", "718 Boxster", "two thousand twenty two", 2022, "73500", 73500.00, "22,300 miles", 22300, "debit card", "Debit Card", "chicago", "Chicago", "IL", "IL", "George Bell", "shipped", "Shipped"],
+    [15, "###########", "2024-09-02", "Mia Hernandez", "Macan GTS", "Macan GTS", 2024, 2024, "95,000 dollars", 95000.00, "3,500 mi", 3500, "Financing", "Financing", "phoenix", "Phoenix", "arizona", "AZ", "Helen Brooks", "IN TRANSIT", "In Transit"],
+    [16, "September 17, 2024", "2024-09-17", "James Lopez", "Taycan Turbo", "Taycan Turbo", 2024, 2024, "$153,200.50", 153200.50, "750 miles", 750, "ACH payment", "Bank Transfer", "dallas", "Dallas", "tx", "TX", "Samuel Price", "delivered", "Delivered"],
+    [17, "2024-10-40", "INVALID", "Charlotte Young", "911 GT3", "911 GT3", 2023, 2023, "241,000", 241000.00, "19,250", 19250, "WireTransfer", "Bank Transfer", "las vegas", "Las Vegas", "nv", "NV", "Peter Ford", "pending", "Pending"],
+    [47, "2026-12-40", "INVALID", "Nora Simmons", "911 GT3 RS", "911 GT3 RS", 2024, 2024, "$286,500", 286500.00, "700 miles", 700, "WireTransfer", "Bank Transfer", "arlington", "Arlington", "tx", "TX", "Peter Lane", "pending", "Pending"]
+]
+
+df = pd.DataFrame(raw_data, columns=columns)
+
+# 2) INICIALIZAÇÃO DO WORKBOOK
+wb = openpyxl.Workbook()
+
+# Paleta/estilos
+font_family = "Segoe UI"
+header_fill = PatternFill(start_color="2A3439", end_color="2A3439", fill_type="solid")
+zebra_fill = PatternFill(start_color="F5F7F8", end_color="F5F7F8", fill_type="solid")
+kpi_fill = PatternFill(start_color="EAEEF0", end_color="EAEEF0", fill_type="solid")
+
+font_title = Font(name=font_family, size=18, bold=True, color="2A3439")
+font_section = Font(name=font_family, size=13, bold=True, color="2A3439")
+font_header = Font(name=font_family, size=11, bold=True, color="FFFFFF")
+font_body = Font(name=font_family, size=11, color="333333")
+font_bold = Font(name=font_family, size=11, bold=True, color="333333")
+
+thin_border = Border(
+    left=Side(style="thin", color="D3D3D3"),
+    right=Side(style="thin", color="D3D3D3"),
+    top=Side(style="thin", color="D3D3D3"),
+    bottom=Side(style="thin", color="D3D3D3")
+)
+double_bottom = Border(bottom=Side(style="double", color="2A3439"))
+
+# 3) ABA DASHBOARD
+ws_dash = wb.active
+ws_dash.title = "Dashboard"
+ws_dash.views.sheetView[0].showGridLines = True
+
+# Título e subtítulo
+ws_dash["B2"] = "PORSCHE PERFORMANCE DASHBOARD"
+ws_dash["B2"].font = font_title
+ws_dash["B3"] = "Visão Geral de Vendas e KPIs da Operação"
+ws_dash["B3"].font = Font(name=font_family, size=11, italic=True, color="555555")
+
+# Blocos de KPI
+kpis = [
+    {"col_start": 2, "col_end": 4, "lbl": "FATURAMENTO TOTAL", "formula": "=SUM(Dados!J:J)", "fmt": "$#,##0.00"},
+    {"col_start": 5, "col_end": 6, "lbl": "TOTAL DE VENDAS", "formula": "=COUNTA(Dados!A:A)-1", "fmt": "#,##0"},
+    {"col_start": 7, "col_end": 8, "lbl": "TICKET MÉDIO", "formula": "=B6/E6", "fmt": "$#,##0.00"}
+]
+for kpi in kpis:
+    cs, ce = kpi["col_start"], kpi["col_end"]
+    # mescla rótulo e valor
+    ws_dash.merge_cells(start_row=5, start_column=cs, end_row=5, end_column=ce)
+    ws_dash.merge_cells(start_row=6, start_column=cs, end_row=6, end_column=ce)
+
+    lbl_cell = ws_dash.cell(row=5, column=cs, value=kpi["lbl"])
+    lbl_cell.font = Font(name=font_family, size=9, color="555555")
+    lbl_cell.alignment = Alignment(horizontal="center", vertical="center")
+    lbl_cell.fill = kpi_fill
+
+    val_cell = ws_dash.cell(row=6, column=cs, value=kpi["formula"])
+    val_cell.font = Font(name=font_family, size=18, bold=True, color="2A3439")
+    val_cell.alignment = Alignment(horizontal="center", vertical="center")
+    val_cell.fill = kpi_fill
+    val_cell.number_format = kpi["fmt"]
+
+    for r in range(5, 7):
+        for c in range(cs, ce + 1):
+            ws_dash.cell(row=r, column=c).border = thin_border
+
+# Tabela resumo por modelo
+ws_dash["B9"] = "Métricas por Modelo de Veículo"
+ws_dash["B9"].font = font_section
+
+headers = ["Modelo", "Qtd Vendas", "Faturamento"]
+for idx, text in enumerate(headers, start=2):
+    cell = ws_dash.cell(row=11, column=idx, value=text)
+    cell.font = font_header
+    cell.fill = header_fill
+    cell.alignment = Alignment(horizontal="left" if idx == 2 else "right", vertical="center")
+    cell.border = thin_border
+
+models_unique = sorted(list(df["PorscheModelSanitized"].unique()))
+row_idx = 12
+for model in models_unique:
+    # Coluna B: modelo
+    m_cell = ws_dash.cell(row=row_idx, column=2, value=model)
+    m_cell.font = font_body
+    m_cell.border = thin_border
+    m_cell.alignment = Alignment(horizontal="left")
+
+    # Coluna C: quantidade por modelo na aba Dados col F
+    q_cell = ws_dash.cell(row=row_idx, column=3, value=f'=COUNTIF(Dados!F:F, "{model}")')
+    q_cell.font = font_body
+    q_cell.alignment = Alignment(horizontal="right")
+    q_cell.number_format = "#,##0"
+    q_cell.border = thin_border
+
+    # Coluna D: soma de faturamento por modelo (Dados!F criterio, Dados!J valores)
+    v_cell = ws_dash.cell(row=row_idx, column=4, value=f'=SUMIF(Dados!F:F, "{model}", Dados!J:J)')
+    v_cell.font = font_body
+    v_cell.alignment = Alignment(horizontal="right")
+    v_cell.number_format = "$#,##0.00"
+    v_cell.border = thin_border
+
+    # Zebra
+    fill_to_apply = zebra_fill if (row_idx % 2 == 0) else None
+    if fill_to_apply:
+        for col in range(2, 5):
+            ws_dash.cell(row=row_idx, column=col).fill = fill_to_apply
+
+    row_idx += 1
+
+# Largura de colunas no Dashboard
+dash_col_widths = {2: 28, 3: 14, 4: 16, 5: 12, 6: 12, 7: 14, 8: 14}
+for col_idx, width in dash_col_widths.items():
+    ws_dash.column_dimensions[get_column_letter(col_idx)].width = width
+
+# Gráfico de barras (Qtd Vendas por Modelo)
+chart = BarChart()
+chart.type = "col"
+chart.title = "Vendas por Modelo"
+chart.y_axis.title = "Quantidade"
+chart.x_axis.title = "Modelo"
+
+# Categorias (modelos) em B12:B(…)
+cat_ref = Reference(ws_dash, min_col=2, min_row=12, max_col=2, max_row=row_idx - 1)
+# Série (quantidade) em C12:C(…)
+data_ref = Reference(ws_dash, min_col=3, min_row=11, max_col=3, max_row=row_idx - 1)  # inclui cabeçalho em row 11
+chart.add_data(data_ref, titles_from_header=True)
+chart.set_categories(cat_ref)
+chart.height = 8
+chart.width = 20
+
+# Posiciona o gráfico
+ws_dash.add_chart(chart, "F9")
+
+# Linha de separação estética
+for c in range(2, 9):
+    cell = ws_dash.cell(row=8, column=c, value=None)
+    cell.border = double_bottom
+
+# 4) ABA DADOS
+ws_data = wb.create_sheet(title="Dados")
+
+# Escreve cabeçalhos
+for j, col_name in enumerate(columns, start=1):
+    cell = ws_data.cell(row=1, column=j, value=col_name)
+    cell.font = font_header
+    cell.fill = header_fill
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+    cell.border = thin_border
+
+# Escreve dados
+for i, row in enumerate(df.itertuples(index=False), start=2):
+    for j, value in enumerate(row, start=1):
+        cell = ws_data.cell(row=i, column=j, value=value)
+        cell.font = font_body
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+        cell.border = thin_border
+
+# Formatação de números nas colunas sanitizadas:
+# J = SalesPriceSanitized (índice 10), L = VehicleMileageSanitized (índice 12),
+# H = ModelYearSanitized (índice 8). (Contando a partir de 1.)
+num_formats = {
+    10: "$#,##0.00",  # SalesPriceSanitized
+    12: "#,##0",      # VehicleMileageSanitized
+    8: "#,##0"        # ModelYearSanitized
+}
+max_row = ws_data.max_row
+for col_idx, fmt in num_formats.items():
+    for r in range(2, max_row + 1):
+        ws_data.cell(row=r, column=col_idx).number_format = fmt
+        ws_data.cell(row=r, column=col_idx).alignment = Alignment(horizontal="right")
+
+# Ajusta larguras de coluna com base no tamanho do cabeçalho e de alguns valores
+for col_idx in range(1, len(columns) + 1):
+    col_letter = get_column_letter(col_idx)
+    max_length = len(str(ws_data.cell(row=1, column=col_idx).value))
+    # amostra de até 50 linhas para estimar largura
+    for r in range(2, min(max_row, 50) + 1):
+        val = ws_data.cell(row=r, column=col_idx).value
+        if val is not None:
+            max_length = max(max_length, len(str(val)))
+    ws_data.column_dimensions[col_letter].width = min(max_length + 2, 40)
+
+# Congela painéis na aba Dados
+ws_data.freeze_panes = "A2"
+
+# Salva arquivo
+output_filename = "porsche_dashboard.xlsx"
+wb.save(output_filename)
+print(f"Arquivo gerado: {output_filename}")
